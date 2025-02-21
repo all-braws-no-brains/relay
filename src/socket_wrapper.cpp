@@ -1,15 +1,16 @@
 #include "relay/socket_wrapper.h"
 #include "relay/logger.h"
-#include <string>
 #include <stdexcept>
 #include <cstring>
 #include <unistd.h>
 #include <arpa/inet.h>
-
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <fcntl.h> 
 
 namespace relay {
 
-SocketWrapper::SocketWrapper(SocketMode mode) : socketFd_(-1), mode_(mode), isSocketOpen_(false) {
+SocketWrapper::SocketWrapper(SocketMode mode) : socketFd_(-1), mode_(mode), isSocketOpen_(false), useIPv6_(false) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     //Create the socket
@@ -21,24 +22,31 @@ SocketWrapper::SocketWrapper(SocketMode mode) : socketFd_(-1), mode_(mode), isSo
     }
 
     isSocketOpen_ = true;
-    Logger::getInstance().log(LogLevel::INFO, "SocketWrapper initialized. Mode: " + (mode == SocketMode::SERVER) ? "SERVER" : "CLIENT");
+    Logger::getInstance().log(LogLevel::INFO, "SocketWrapper initialized. Mode: " +
+        std::string((mode == SocketMode::SERVER) ? "SERVER" : "CLIENT"));
 }  
+
+SocketWrapper::SocketWrapper(int socketFd) 
+    : socketFd_(socketFd), mode_(SocketMode::CLIENT), isSocketOpen_(true) {}
 
 SocketWrapper::~SocketWrapper() {
     close();
     Logger::getInstance().log(LogLevel::INFO, "SocketWrapper destroyed.");
 }
 
-void SocketWrapper::initialize(const std::string& ip, int port) {
+void SocketWrapper::initialize(const std::string& ip, int port, bool useIPv6) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     if (!isSocketOpen_) {
         throw std::runtime_error("Socket is not open.");
     }
 
+    useIPv6_ = useIPv6;
+    
     sockaddr_in address{};
     address.sin_family = AF_INET;
     address.sin_port = htons(port);
+
     if (inet_pton(AF_INET, ip.c_str(), &address.sin_addr) <= 0) {
         const std::string errorMsg = "Invalid IP address: " + ip;
         Logger::getInstance().log(LogLevel::ERROR, errorMsg);
@@ -50,17 +58,20 @@ void SocketWrapper::initialize(const std::string& ip, int port) {
             const std::string errorMsg = "Failed to bind socket: " + std::string(std::strerror(errno));
                 Logger::getInstance().log(LogLevel::ERROR, errorMsg);
                 throw std::runtime_error(errorMsg);
-        } else if (mode_ == SocketMode::CLIENT) {
-            if (connect(socketFd_, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == -1) {
-                const std::string errorMsg = "Failed to connect to server: " + std::string(std::strerror(errno));
-                Logger::getInstance().log(LogLevel::ERROR, errorMsg);
-                throw std::runtime_error(errorMsg);
-            }
-            Logger::getInstance().log(LogLevel::INFO, "Connected to server at " + ip + ":" + std::to_string(port));
+        }
+    } 
+    else if (mode_ == SocketMode::CLIENT) {
+        if (connect(socketFd_, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == -1) {
+            const std::string errorMsg = "Failed to connect to server: " + std::string(std::strerror(errno));
+            Logger::getInstance().log(LogLevel::ERROR, errorMsg);
+            throw std::runtime_error(errorMsg);
         }
     }
+    Logger::getInstance().log(LogLevel::INFO, "Connected to server at " + ip + ":" + std::to_string(port));
+
 }
 
+// Start listening (server only)
 void SocketWrapper::listen(int maxConnections) {
     if (mode_ != SocketMode::SERVER) {
         throw std::logic_error("listen() can only be used in SERVER mode.");
@@ -147,6 +158,39 @@ bool SocketWrapper::isOpen() const {
 void SocketWrapper::setErrorHandler(const std::function<void(const std::string&)>& handler) {
     std::lock_guard<std::mutex> lock(mutex_);
     errorHandler_ = handler;
+}
+
+void SocketWrapper::setTimeout(int timeout) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    timeval tv{};
+    tv.tv_sec = timeout;
+    tv.tv_usec = 0;
+
+    if (setsockopt(socketFd_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1 ||
+        setsockopt(socketFd_, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == -1)  {
+            const std::string errorMsg = "Failed to socket timeout: " + std::string(std::strerror(errno));
+            Logger::getInstance().log(LogLevel::ERROR, errorMsg);
+            throw std::runtime_error(errorMsg);
+    }
+}
+
+void SocketWrapper::setNotBlocking(bool isNonBlocking) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    int flags = fcntl(socketFd_, F_GETFL, 0);
+    if (flags == -1 || fcntl(socketFd_, F_SETFL, isNonBlocking ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK)) == -1) {
+        const std::string errorMsg = "Failed to set non-blocking mode: " + std::string(std::strerror(errno));
+        Logger::getInstance().log(LogLevel::ERROR, errorMsg);
+        throw std::runtime_error(errorMsg);
+    }
+}
+
+void SocketWrapper::shutdown(bool read, bool write) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    int how = (read && write) ? SHUT_RDWR : (read ? SHUT_RD : SHUT_WR);
+    ::shutdown(socketFd_, how);
 }
 
 }

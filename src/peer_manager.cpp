@@ -6,9 +6,9 @@
 
 namespace relay {
 
-PeerManager::PeerManager() {};
+PeerManager::PeerManager() = default;
 
-PeerManager::~PeerManager() {};
+PeerManager::~PeerManager() = default;
 
 
 void PeerManager::addPeer(const std::shared_ptr<Peer>& peer) {
@@ -16,12 +16,13 @@ void PeerManager::addPeer(const std::shared_ptr<Peer>& peer) {
         Logger::getInstance().log(LogLevel::ERROR, "Cannot add a null peer.");
         throw std::invalid_argument("Cannot add a null peer.");
     }
-
-    std::lock_guard<std::mutex> lock(mutex_);
-    auto result = peers_.emplace(peer->getId(), peer);
-    if (!result.second) {
-        Logger::getInstance().log(LogLevel::ERROR, "Peer with ID alrady exists: " + peer->getId());
-        throw std::runtime_error("Peer with ID " + peer->getId() + " already exists.");
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (peers_.find(peer->getId()) != peers_.end()) {
+            Logger::getInstance().log(LogLevel::ERROR, "Peer with ID already exists: " + peer->getId());
+            return;
+        }
+        peers_.emplace(peer->getId(), peer);
     }
 
     Logger::getInstance().log(LogLevel::INFO, "Added peer with ID: " + peer->getId());
@@ -52,14 +53,14 @@ std::shared_ptr<Peer> PeerManager::getPeer(const std::string& peerId) const {
 }
 
 bool PeerManager::relayMessage(const std::string& sourceId, const std::string& targetId, const std::string& message) {
-    std::shared_ptr<Peer> sourcePeer;
-    std::shared_ptr<Peer> targetPeer;
+    std::shared_ptr<Peer> sourcePeer = nullptr;
+    std::shared_ptr<Peer> targetPeer = nullptr;
 
     {
         // Scoped lock for thread safety
         std::lock_guard<std::mutex> lock(mutex_);
-        sourcePeer = getPeer(sourceId);
-        targetPeer = getPeer(targetId);
+        sourcePeer = peers_.find(sourceId) != peers_.end() ? peers_.at(sourceId) : nullptr;
+        targetPeer = peers_.find(targetId) != peers_.end() ? peers_.at(targetId) : nullptr;
     }
 
 
@@ -82,6 +83,38 @@ bool PeerManager::relayMessage(const std::string& sourceId, const std::string& t
         Logger::getInstance().log(LogLevel::ERROR, "Message relay failed with exception: " + std::string(e.what()));
         return false;
     }
+}
+
+void PeerManager::addDiscoveredPeers(const std::vector<std::shared_ptr<Peer>>& discoveredPeers) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (const auto& peer : discoveredPeers) {
+        if (peer && peers_.find(peer->getId()) == peers_.end()) {
+            peers_.emplace(peer->getId(), peer);
+            Logger::getInstance().log(LogLevel::INFO, "Discovered and added peer with ID: "+ peer->getId());
+        } else if (peer) {
+            Logger::getInstance().log(LogLevel::INFO, "Skipped adding already known peer with ID: " + peer->getId());
+        }
+    }
+}
+
+void PeerManager::removeInactivePeers(std::chrono::seconds timeout) {
+    auto now = std::chrono::system_clock::now();
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto it = peers_.begin(); it != peers_.end(); ) {
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - it->second->getLastActive()) > timeout) {
+            Logger::getInstance().log(LogLevel::INFO, "Removing inactive peer with ID: " + it->first);
+            it = peers_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void PeerManager::onPeerDiscovery(const std::shared_ptr<Peer>& peer) {
+    if (!peer) return;
+
+    addPeer(peer);
+    Logger::getInstance().log(LogLevel::INFO, "Discovered new peer with ID: " + peer->getId());
 }
 
 };

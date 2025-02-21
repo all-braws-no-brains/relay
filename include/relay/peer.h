@@ -6,6 +6,7 @@
 #include <chrono>
 #include <optional>
 #include <queue>
+#include "relay/socket_wrapper.h"
 
 /**
  * @file peer.h
@@ -31,7 +32,7 @@ public:
      * @param ip IP address of the peer.
      * @param port Port number of the peer.
      */
-    Peer(const std::string& id, const std::string& ip, int port);
+    Peer(const std::string& id, const std::string& ip, int port, std::shared_ptr<SocketWrapper> socket);
 
     /**
      * @brief Gets the unique ID of the peer.
@@ -75,23 +76,30 @@ public:
     std::optional<std::string> getMetadata() const;
 
     /**
-     * @brief Relays a message from one peer to another.
-     *
-     * @param sourceId The unique identifier of the source peer.
-     * @param targetId The unique identifier of the target peer.
-     * @param message The message to be relayed.
-     * @return true if the message was successfully relayed, false otherwise.
+     * @brief Sends a message to this peer.
+     * 
+     * @param message The message to be sent.
+     * @return True if the message was successfully sent, false otherwise.
      */
-    bool relayMessage(const std::string& sourceId, const std::string& targetId, const std::string& message);
+    bool sendMessage(const std::string& message);
 
     /**
-     * @brief Receives a message from a peer.
-     *
-     * @param sourceId The unique identifier of the source peer.
-     * @param message The message to be relayed.
-     * @return true if the message was successfully relayed, false otherwise.
+     * @brief Receives a message from this peer.
+     * 
+     * @return The received message.
      */
-    void receiveMessage(const std::string& sourceId, const std::string& message);
+    std::string receiveMessage();
+
+    /**
+     * @brief Checks if the peer is connected.
+     * @return True if the peers is connected, false otherwise.
+     */
+    bool isConnected() const;
+
+    /**
+     * @brief Closes the peer connection. 
+     */
+    void closeConnection();
 
 private:
     std::string id_;                                      ///< Unique identifier of the peer.
@@ -102,10 +110,12 @@ private:
 
     mutable std::mutex mutex_;                           ///< Mutex for thread-safe access.
 
+    std::shared_ptr<SocketWrapper> socket_;
+    
     mutable std::mutex messageQueueMutex_;
     std::queue<std::string> messageQueue_;
 };
 
 } // namespace relay
 
-#endif // RELAY_PEER_H
+#endif

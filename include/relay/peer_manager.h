@@ -41,11 +41,19 @@ public:
 
     /**
      * @brief Removes a peer from the manager by its ID.
-     *
+     * 
      * @param peerId The unique identifier of the peer to be removed.
      * @return true if the peer was successfully removed, false otherwise.
      */
     bool removePeer(const std::string& peerId);
+
+    /**
+     * @brief Checks if a peer exists in the manager.
+     * 
+     * @param peerId The unique identifier of the peer to check.
+     * @return True if the peer exists, false otherwise.
+     */
+    bool hasPeer(const std::string& peerId) const;
 
     /**
      * @brief Retrieves a peer by its ID.
@@ -64,6 +72,28 @@ public:
      * @return true if the message was successfully relayed, false otherwise.
      */
     bool relayMessage(const std::string& sourceId, const std::string& targetId, const std::string& message);
+
+    /**
+     * @brief Adds a list of discovered peers to the manager.
+     * 
+     * @param discoveredPeers A vector of shared pointers to the newly discovered peers.
+     */
+    void addDiscoveredPeers(const std::vector<std::shared_ptr<Peer>>& discoveredPeers);
+    
+    /**
+     * @brief Removes peers that have been inactive for sepcified time duration.
+     * 
+     * @param timeout The duration of inactivity (in seconds) after which a peer is considered inactive.
+     */
+    void removeInactivePeers(std::chrono::seconds timeout);
+    
+    /**
+     * @brief Accepts a new peer discovered by the discovery module.
+     * 
+     * @param peer A shared pointer to the newly discovered peer.
+     */
+    void onPeerDiscovery(const std::shared_ptr<Peer>& peer);
+    
 
     /**
      * @brief Lists all peers currently managed.
