@@ -1,0 +1,33 @@
+{
+    "version": 4,
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/include",               // Include the main include folder
+                "${workspaceFolder}/include/relay",         // Include the relay headers
+                "${workspaceFolder}/tests",                 // Include test headers, if any
+                "/usr/include/c++/14",                      // System C++ headers for g++ 14
+                "/usr/include",
+                "/usr/src/gtest",                             // General system includes                             // General system includes
+                "/usr/local/include"                        // Local system includes
+            ],
+            "defines": [],
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerPath": "/usr/bin/g++",
+            "cStandard": "c17",
+            "cppStandard": "c++17",                         // Match the C++ standard you're using
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/include",
+                    "${workspaceFolder}/src",
+                    "${workspaceFolder}/tests",
+                    "/usr/include",
+                    "/usr/local/include"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            }
+        }
+    ]
+}
