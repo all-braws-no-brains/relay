@@ -40,16 +40,24 @@ public:
      * @brief Constructor for SocketWrapper.
      * @param mode The mode of the socket (SERVER or CLIENT).
      */
-    SocketWrapper(SocketMode mode);
+    explicit SocketWrapper(SocketMode mode);
 
+    /**
+     * @brief Destructor for SocketWrapper.
+     */
     ~SocketWrapper();
+
+    /**
+     * @brief Specialized constructor for accepted sockets.
+     */
+    SocketWrapper(int socketFd);
 
     /**
      * @brief Initializes the socket (bind for server, connects for client).
      * @param ip The IP address to bind/connect to.
      * @param port The port to ind/connect to.
      */
-    void initialize(const std::string& ip, int port);
+    void initialize(const std::string& ip, int port, bool useIPv6 = false);
 
     /**
      * @brief Strts the server in listening mode.
@@ -94,12 +102,32 @@ public:
      */
     void setErrorHandler(const std::function<void(const std::string&)>& handler);
 
+    /**
+     * @brief Sets the timout for socket operations.
+     * @param timeout The timeout duration in seconds.
+     */
+    void setTimeout(int timeout);
+
+    /**
+     * @brief Toggles non-blocking mode for the socket.
+     * @param isNonBlocking Set to true to enable non-blocking mode, false to diable it.
+     */
+    void setNotBlocking(bool isNonBlocking);
+
+    /**
+     * @brief Shuts down the socket (optionally read, write, or both)
+     * @param read If true, shuts down the read operations.
+     * @param write If true, shuts down the write operations.
+     */
+    void shutdown(bool read = true, bool write = true);
+
 private:
     int socketFd_; ///< File descriptor for the socket.
     SocketMode mode_;
     mutable std::mutex mutex_;
     std::optional<std::function<void(const std::string&)>> errorHandler_;
     std::atomic<bool> isSocketOpen_;
+    bool useIPv6_;
 
     /**
      * @brief Disables copy semantics for thread safety.
@@ -112,6 +140,17 @@ private:
      */
     SocketWrapper(SocketWrapper& other) noexcept;
     SocketWrapper& operator=(SocketWrapper&& other) noexcept;
+
+    /**
+     * @brief Internal helper to handle errors.
+     * @param errorMessage The error message to handle.
+     */
+    void handleError(const std::string& errorMessage);
+
+    /**
+     * @brief Ensures proper cleanup of resources.
+     */
+    void cleanup();
 };
 }
 #endif  
