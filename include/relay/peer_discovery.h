@@ -12,125 +12,104 @@
 #include "peer_manager.h"
 #include "socket_wrapper.h"
 
-namespace relay {
+namespace relay
+{
 
-/**
- * @enum DiscoveryMessageType
- * @brief Enum for discovery message types.
- */
-enum class DiscoveryMessageType : uint8_t {
-    DISCOVERY_REQUEST = 0,
-    DISCOVERY_RESPONSE = 1
-};
+    enum class DiscoveryMessageType : uint8_t
+    {
+        DISCOVERY_REQUEST = 0,
+        DISCOVERY_RESPONSE = 1
+    };
 
-/**
- * @brief Utility function to get the string representation of a discovery message type.
- * @param type The discovery message type.
- * @return The corresponding string representation.
- */
-std::string toString(DiscoveryMessageType type);
-
-/**
- * @brief Utility function to get the size of discovery message type as string.
- * @param type The discovery message type.
- * @return The size of the string representation.
- */
-size_t messageSize(DiscoveryMessageType type);
-
-/// -------------------------------------------------------------------------------------
-
-/**
- * @class PeerDiscovery
- * @brief Handles peer discovery and automatic addition of peers to the routing table.
- * 
- * This class enables peer discovery within the same network using multicast or broadcast.
- * Discovered peers are stored and can be retrieved for further operations.
- */
-class PeerDiscovery {
-public:
-    /**
-     * @brief Constructor for PeerDiscovery.
-     * @param multicastIp Multicast group address (e.g., "224.0.0.1") or broadcast address.
-     * @param multicastPort UDP port used for discovery.
-     */
-    PeerDiscovery(const std::string& multicastIp, int multicastPort);
+    std::string toString(DiscoveryMessageType type);
+    size_t messageSize(DiscoveryMessageType type);
 
     /**
-     * @brief Destructor for PeerDiscovery. Stops discovery threads and cleans up resources.
+     * @class PeerDiscovery
+     * @brief Handles peer discovery using UDP multicast.
+     *
+     * Enables discovery of peers within the same network via multicast, storing discovered peers
+     * as IP:port strings for integration with PeerManager.
      */
-    ~PeerDiscovery();
+    class PeerDiscovery
+    {
+    public:
+        /**
+         * @brief Constructs a PeerDiscovery instance.
+         * @param multicastIp Multicast group address (e.g., "224.0.0.251").
+         * @param multicastPort UDP port for discovery (e.g., 5353).
+         * @param localIp Local interface IP to bind to (e.g., "0.0.0.0").
+         */
+        PeerDiscovery(const std::string &multicastIp, int multicastPort, const std::string &localIp = "0.0.0.0");
 
-    /**
-     * @brief Starts the peer discovery service.
-     */
-    void start();
+        /**
+         * @brief Destructor. Stops discovery and cleans up.
+         */
+        ~PeerDiscovery();
 
-    /**
-     * @brief Stops the peer discovery service.
-     */
-    void stop();
+        /**
+         * @brief Starts the peer discovery service with sender and listener threads.
+         */
+        void start();
 
-    /**
-     * @brief Sets a custom error handler for discovery logic.
-     * @param handler A function to handle errors (takes an error message as a parameter).
-     */
-    void setErrorHandler(const std::function<void(const std::string&)>& handler);
+        /**
+         * @brief Stops the peer discovery service.
+         */
+        void stop();
 
-    /**
-     * @brief Retrieves the list of currently discovered peers.
-     * @return A vector containing the addresses of discovered peers.
-     */
-    std::vector<std::string> getDiscoveredPeers() const;
+        /**
+         * @brief Sets a custom error handler for discovery errors.
+         * @param handler Function taking an error message.
+         */
+        void setErrorHandler(const std::function<void(const std::string &)> &handler);
 
-private:
-    std::string multicastIp_;                              ///< The multicast IP address.
-    int multicastPort_;                                    ///< The multicast port.
-    std::shared_ptr<SocketWrapper> socketWrapper_;         ///< Socket wrapper for network operations.
-    std::vector<std::string> peers_;                       ///< List of discovered peers.
-    mutable std::mutex peersMutex_;                        ///< Mutex for accessing the peers list.
+        /**
+         * @brief Gets the list of discovered peers (IP:port strings).
+         * @return Vector of peer addresses.
+         */
+        std::vector<std::string> getDiscoveredPeers() const;
 
-    std::atomic<bool> stopDiscovery_;                      ///< Flag to control the discovery process.
-    std::unique_ptr<std::thread> discoveryThread_;         ///< Thread for running the discovery process.
-    mutable std::mutex mutex_;                             ///< Mutex for thread-safe discovery start/stop.
+    private:
+        std::string multicastIp_;                      ///< Multicast group address.
+        int multicastPort_;                            ///< Multicast port.
+        std::string localIp_;                          ///< Local interface IP.
+        std::shared_ptr<SocketWrapper> socketWrapper_; ///< UDP socket for multicast.
+        std::vector<std::string> peers_;               ///< Discovered peers (IP:port).
+        mutable std::mutex peersMutex_;                ///< Mutex for peers list.
+        std::atomic<bool> stopDiscovery_;              ///< Flag to stop discovery.
+        std::unique_ptr<std::thread> senderThread_;    ///< Thread for sending discovery requests.
+        std::unique_ptr<std::thread> listenerThread_;  ///< Thread for receiving responses.
+        mutable std::mutex mutex_;                     ///< Mutex for thread control.
 
-    /**
-     * @brief Sends periodic discovery requests to other peers on the network.
-     */
-    void broadcastDiscoveryPacket();
+        /**
+         * @brief Sends periodic multicast discovery requests.
+         */
+        void discoverySender();
 
-    /**
-     * @brief Receives responses from peers after broadcasting a discovery packet.
-     */
-    void receiveDiscoveryResponses();
+        /**
+         * @brief Listens for multicast discovery responses and requests.
+         */
+        void discoveryListener();
 
-    /**
-     * @brief Handles a discovery response and adds the peer to the discovered peers list.
-     * @param response The response message from the peer.
-     */
-    void handleDiscoveryResponse(const std::string& response);
+        /**
+         * @brief Responds to a discovery request from another peer.
+         * @param senderAddr Address of the requesting peer.
+         */
+        void respondToDiscovery(const struct sockaddr_in &senderAddr);
 
-    /**
-     * @brief Utility function to log errors.
-     * @param message The error message.
-     */
-    void logError(const std::string& message) const;
+        /**
+         * @brief Handles a discovery response, adding the peer if new.
+         * @param response Response message.
+         * @param senderAddr Address of the responding peer.
+         */
+        void handleDiscoveryResponse(const std::string &response, const struct sockaddr_in &senderAddr);
 
-    /**
-     * @brief Reserved for future functionality: Sends discovery requests periodically.
-     */
-    void discoverySender(); // Reserved for future functionality.
-
-    /**
-     * @brief Reserved for future functionality: Listens for discovery requests.
-     */
-    void discoveryListener(); // Reserved for future functionality.
-
-    /**
-     * @brief Reserved for future functionality: Responds to a discovery request.
-     * @param senderAddr Address of the requesting peer.
-     */
-    void respondToDiscovery(struct sockaddr_in senderAddr); // Reserved for future functionality.
-};
+        /**
+         * @brief Logs an error message via the error handler or logger.
+         * @param message Error message.
+         */
+        void logError(const std::string &message) const;
+    };
 
 } // namespace relay
 
