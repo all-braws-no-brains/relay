@@ -1,5 +1,5 @@
-#ifndef SOCKET_WRAPPER_H
-#define SOCKET_WRAPPER_H
+#ifndef RELAY_SOCKET_WRAPPER_H
+#define REALY_SOCKET_WRAPPER_H
 
 #include <string>
 #include <mutex>
@@ -11,146 +11,150 @@
 #include <functional>
 #include <atomic>
 
-/**
- * @file socket_wrapper.h
- * @brief Defines a custom socket wrapper tailored for thread-safe and modular use.
- */
+namespace relay
+{
 
-namespace relay {
-
-/**
- * @enum SocketMode
- * @brief Enum for socket operation mode.
- */
-enum class SocketMode {
-    SERVER, 
-    CLIENT
-};
-
-/**
- * @class SocketWrapper
- * @brief A thread-safe custom socket wrapper for server and client operations.
- * 
- * The SocketWrapper provides an abstraction over standard sockets,
- * offering  a thread-safe , easy-to-use interface for data transmission.
- */
-class SocketWrapper {
-public:
-    /**
-     * @brief Constructor for SocketWrapper.
-     * @param mode The mode of the socket (SERVER or CLIENT).
-     */
-    explicit SocketWrapper(SocketMode mode);
+    enum class SocketMode
+    {
+        TCP_SERVER,
+        TCP_CLIENT,
+        UDP
+    };
 
     /**
-     * @brief Destructor for SocketWrapper.
+     * @class SocketWrapper
+     * @brief Thread-safe socket abstraction for TCP and UDP operations.
      */
-    ~SocketWrapper();
+    class SocketWrapper
+    {
+    public:
+        /**
+         * @brief Constructs a SocketWrapper with a specified mode.
+         * @param mode TCP_SERVER, TCP_CLIENT, or UDP.
+         */
+        explicit SocketWrapper(SocketMode mode);
 
-    /**
-     * @brief Specialized constructor for accepted sockets.
-     */
-    SocketWrapper(int socketFd);
+        /**
+         * @brief Constructs from an accepted TCP socket FD.
+         * @param socketFd File descriptor of an accepted socket.
+         */
+        SocketWrapper(int socketFd);
 
-    /**
-     * @brief Initializes the socket (bind for server, connects for client).
-     * @param ip The IP address to bind/connect to.
-     * @param port The port to ind/connect to.
-     */
-    void initialize(const std::string& ip, int port, bool useIPv6 = false);
+        /**
+         * @brief Destructor. Closes the socket.
+         */
+        ~SocketWrapper();
 
-    /**
-     * @brief Strts the server in listening mode.
-     * @param maxConnections Maximum number of pending conections for the socket. 
-     */
-    void listen(int maxConnections);
+        /**
+         * @brief Initializes the socket (bind for servers/UDP, connect for TCP clients).
+         * @param ip IP address to bind/connect to.
+         * @param port Port to bind/connect to.
+         * @param useIPv6 Use IPv6 instead of IPv4 (default: false).
+         */
+        void initialize(const std::string &ip, int port, bool useIPv6 = false);
 
-    /**
-     * @brief Accepts a client connection (only for server mode).
-     * @return A shared pointer to the new SocketWrapper for the client connction.
-     */
-    std::shared_ptr<SocketWrapper> accept();
+        /**
+         * @brief Enables multicast on a UDP socket.
+         * @param multicastIp Multicast group address (e.g., "224.0.0.251").
+         * @param multicastPort Multicast port.
+         */
+        void enableMulticast(const std::string &multicastIp, int multicastPort);
 
-    /**
-     * @brief Sends data through the socket.
-     * @param data The data to send.
-     * @return The number of bytes sent.
-     */
-    size_t send(const std::string& data);
+        /**
+         * @brief Starts listening (TCP server only).
+         * @param maxConnections Max pending connections.
+         */
+        void listen(int maxConnections);
 
-    /**
-     * @brief Receives data from the socket.
-     * @param bufferSize The size of the buffer to receive data.
-     * @return The received data as a string.
-     */
-    std::string receive(size_t bufferSize);
+        /**
+         * @brief Accepts a TCP client connection (TCP server only).
+         * @return Shared pointer to a new SocketWrapper for the client.
+         */
+        std::shared_ptr<SocketWrapper> accept();
 
-    /**
-     * @brief Closes the socket connection.
-     */
-    void close();
+        /**
+         * @brief Sends data through the socket.
+         * @param data Data to send.
+         * @return Bytes sent, or 0 on failure.
+         */
+        size_t send(const std::string &data);
 
-    /**
-     * @brief Checks if the socket is open.
-     * @return True is the socket is open, false otherwise.
-     */
-    bool isOpen() const;
+        /**
+         * @brief Sends data to a specific address (UDP only).
+         * @param data Data to send.
+         * @param destAddr Destination address.
+         * @return Bytes sent, or 0 on failure.
+         */
+        size_t sendTo(const std::string &data, const struct sockaddr_in &destAddr);
 
-    /**
-     * @brief Sets a custom error handler for socket operations.
-     * @param handler A function to handle errors (takes an error message as parameter).
-     */
-    void setErrorHandler(const std::function<void(const std::string&)>& handler);
+        /**
+         * @brief Receives data from the socket.
+         * @param bufferSize Buffer size for receiving.
+         * @return Received data, or empty string if failed.
+         */
+        std::string receive(size_t bufferSize);
 
-    /**
-     * @brief Sets the timout for socket operations.
-     * @param timeout The timeout duration in seconds.
-     */
-    void setTimeout(int timeout);
+        /**
+         * @brief Receives data with sender address (UDP only).
+         * @param bufferSize Buffer size for receiving.
+         * @param senderAddr Output parameter for sender’s address.
+         * @return Received data, or empty string if failed.
+         */
+        std::string receiveFrom(size_t bufferSize, struct sockaddr_in &senderAddr);
 
-    /**
-     * @brief Toggles non-blocking mode for the socket.
-     * @param isNonBlocking Set to true to enable non-blocking mode, false to diable it.
-     */
-    void setNotBlocking(bool isNonBlocking);
+        /**
+         * @brief Closes the socket.
+         */
+        void close();
 
-    /**
-     * @brief Shuts down the socket (optionally read, write, or both)
-     * @param read If true, shuts down the read operations.
-     * @param write If true, shuts down the write operations.
-     */
-    void shutdown(bool read = true, bool write = true);
+        /**
+         * @brief Checks if the socket is open.
+         * @return True if open, false otherwise.
+         */
+        bool isOpen() const;
 
-private:
-    int socketFd_; ///< File descriptor for the socket.
-    SocketMode mode_;
-    mutable std::mutex mutex_;
-    std::optional<std::function<void(const std::string&)>> errorHandler_;
-    std::atomic<bool> isSocketOpen_;
-    bool useIPv6_;
+        /**
+         * @brief Sets an error handler for socket operations.
+         * @param handler Function taking an error message.
+         */
+        void setErrorHandler(const std::function<void(const std::string &)> &handler);
 
-    /**
-     * @brief Disables copy semantics for thread safety.
-     */
-    SocketWrapper(const SocketWrapper&) = delete;
-    SocketWrapper& operator=(const SocketWrapper&) = delete;
+        /**
+         * @brief Sets timeout for socket operations.
+         * @param timeout Timeout in seconds.
+         */
+        void setTimeout(int timeout);
 
-    /**
-     * @brief Enables move semantics.
-     */
-    SocketWrapper(SocketWrapper& other) noexcept;
-    SocketWrapper& operator=(SocketWrapper&& other) noexcept;
+        /**
+         * @brief Toggles non-blocking mode.
+         * @param isNonBlocking True to enable non-blocking.
+         */
+        void setNonBlocking(bool isNonBlocking);
 
-    /**
-     * @brief Internal helper to handle errors.
-     * @param errorMessage The error message to handle.
-     */
-    void handleError(const std::string& errorMessage);
+        /**
+         * @brief Shuts down socket read/write operations.
+         * @param read Shut down reading.
+         * @param write Shut down writing.
+         */
+        void shutdown(bool read = true, bool write = true);
 
-    /**
-     * @brief Ensures proper cleanup of resources.
-     */
-    void cleanup();
-};
-}
-#endif  
+    private:
+        int socketFd_; ///< Socket file descriptor.
+        SocketMode mode_;
+        mutable std::mutex mutex_;
+        std::optional<std::function<void(const std::string &)>> errorHandler_;
+        std::atomic<bool> isSocketOpen_;
+        bool useIPv6_;
+
+        SocketWrapper(const SocketWrapper &) = delete;
+        SocketWrapper &operator=(const SocketWrapper &) = delete;
+        SocketWrapper(SocketWrapper &&other) noexcept;
+        SocketWrapper &operator=(SocketWrapper &&other) noexcept;
+
+        void handleError(const std::string &errorMessage);
+        void cleanup();
+    };
+
+} // namespace relay
+
+#endif

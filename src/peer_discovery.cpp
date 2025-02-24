@@ -1,4 +1,3 @@
-#include "relay/peer_manager.h"
 #include "relay/peer_discovery.h"
 #include "relay/logger.h"
 #include <iostream>
@@ -7,133 +6,178 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
-namespace relay {
+namespace relay
+{
 
-std::string toString(DiscoveryMessageType type) {
-    switch (type) {
-    case DiscoveryMessageType::DISCOVERY_REQUEST:
-        return "DISCOVERY_REQUEST";
-    case DiscoveryMessageType::DISCOVERY_RESPONSE:
-        return "DISCOVERY_RESPONSE";
-    default:
-        throw std::invalid_argument("Unknown DiscoveryMessageType");
+    std::string toString(DiscoveryMessageType type)
+    {
+        switch (type)
+        {
+        case DiscoveryMessageType::DISCOVERY_REQUEST:
+            return "DISCOVERY_REQUEST";
+        case DiscoveryMessageType::DISCOVERY_RESPONSE:
+            return "DISCOVERY_RESPONSE";
+        default:
+            throw std::invalid_argument("Unknown DiscoveryMessageType");
+        }
     }
-}
 
-size_t messageSize(DiscoveryMessageType type) {
-    return toString(type).size();
-}
+    size_t messageSize(DiscoveryMessageType type)
+    {
+        return toString(type).size();
+    }
 
+    PeerDiscovery::PeerDiscovery(const std::string &multicastIp, int multicastPort, const std::string &localIp)
+        : multicastIp_(multicastIp),
+          multicastPort_(multicastPort),
+          localIp_(localIp),
+          stopDiscovery_(false),
+          socketWrapper_(std::make_shared<SocketWrapper>(SocketMode::UDP))
+    {
+        socketWrapper_->initialize(localIp_, multicastPort_);          // Bind to local interface
+        socketWrapper_->enableMulticast(multicastIp_, multicastPort_); // Join multicast group
+    }
 
-PeerDiscovery::PeerDiscovery(const std::string& multicastIp, int multicastPort)
-    : multicastIp_(multicastIp),
-      multicastPort_(multicastPort),
-      stopDiscovery_(false),
-      socketWrapper_(std::make_shared<SocketWrapper>(SocketMode::CLIENT)) {}
+    PeerDiscovery::~PeerDiscovery()
+    {
+        stop();
+    }
 
-PeerDiscovery::~PeerDiscovery() {
-    stop();
-}
-
-void PeerDiscovery::start() {
+    void PeerDiscovery::start()
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (discoveryThread_ && discoveryThread_->joinable()) {
+        if ((senderThread_ && senderThread_->joinable()) || (listenerThread_ && listenerThread_->joinable()))
+        {
             Logger::getInstance().log(LogLevel::WARNING, "Peer discovery is already running.");
             return;
         }
 
         stopDiscovery_ = false;
+
+        senderThread_ = std::make_unique<std::thread>(&PeerDiscovery::discoverySender, this);
+        listenerThread_ = std::make_unique<std::thread>(&PeerDiscovery::discoveryListener, this);
+
+        Logger::getInstance().log(LogLevel::INFO, "Started peer discovery on " + multicastIp_ + ":" + std::to_string(multicastPort_));
     }
 
-    // Start the thread for peer discovery
-    discoveryThread_ = std::make_unique<std::thread>([this]() {
-        try {
-            Logger::getInstance().log(LogLevel::INFO, "Starting peer discovery...");
-
-            // Initialize the multicast socket
-            socketWrapper_->initialize(multicastIp_, multicastPort_);
-
-            while (!stopDiscovery_.load()) {
-                broadcastDiscoveryPacket();
-                receiveDiscoveryResponses();
-
-                // Sleep to avoid flooding the network
-                std::this_thread::sleep_for(std::chrono::seconds(5));
-            }
-        } catch (const std::exception& e) {
-            Logger::getInstance().log(LogLevel::ERROR, "Error in peer discovery: " + std::string(e.what()));
+    void PeerDiscovery::stop()
+    {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            stopDiscovery_ = true;
         }
-    });
-}
 
-void PeerDiscovery::stop() {
+        if (senderThread_ && senderThread_->joinable())
+        {
+            senderThread_->join();
+        }
+        if (listenerThread_ && listenerThread_->joinable())
+        {
+            listenerThread_->join();
+        }
+
+        socketWrapper_->close();
+        Logger::getInstance().log(LogLevel::INFO, "Peer discovery stopped.");
+    }
+
+    void PeerDiscovery::setErrorHandler(const std::function<void(const std::string &)> &handler)
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        stopDiscovery_ = true;
+        socketWrapper_->setErrorHandler(handler); // Delegate to socket
     }
 
-    if (discoveryThread_ && discoveryThread_->joinable()) {
-        discoveryThread_->join();
+    std::vector<std::string> PeerDiscovery::getDiscoveredPeers() const
+    {
+        std::lock_guard<std::mutex> lock(peersMutex_);
+        return peers_;
     }
 
-    Logger::getInstance().log(LogLevel::INFO, "Peer discovery stopped.");
-}
+    void PeerDiscovery::discoverySender()
+    {
+        while (!stopDiscovery_.load())
+        {
+            try
+            {
+                std::string discoveryMessage = toString(DiscoveryMessageType::DISCOVERY_REQUEST);
+                struct sockaddr_in destAddr{};
+                destAddr.sin_family = AF_INET;
+                destAddr.sin_port = htons(multicastPort_);
+                inet_pton(AF_INET, multicastIp_.c_str(), &destAddr.sin_addr);
 
-void PeerDiscovery::broadcastDiscoveryPacket() {
-    try {
-        std::string discoveryMessage = "DISCOVERY_REQUEST";
-
-        // Send the discovery message to the multicast group
-        size_t bytesSent = socketWrapper_->send(discoveryMessage);
-
-        Logger::getInstance().log(LogLevel::INFO, "Broadcasted discovery packet: " + discoveryMessage + " (" + std::to_string(bytesSent) + " bytes sent)");
-    } catch (const std::exception& e) {
-        Logger::getInstance().log(LogLevel::ERROR, "Failed to broadcast discovery packet: " + std::string(e.what()));
-    }
-}
-
-void PeerDiscovery::receiveDiscoveryResponses() {
-   while(!stopDiscovery_.load()) {
-        try {
-            std::string response = socketWrapper_->receive(1024);
-            if (!response.empty()) {
-                handleDiscoveryResponse(response);
+                size_t bytesSent = socketWrapper_->sendTo(discoveryMessage, destAddr);
+                Logger::getInstance().log(LogLevel::INFO, "Broadcasted discovery packet: " + discoveryMessage + " (" + std::to_string(bytesSent) + " bytes)");
             }
-        } catch (const std::exception& e) {
-            Logger::getInstance().log(LogLevel::ERROR, "Error received discovery response: " + std::string(e.what()));
-        }
-   }
-}
-
-void PeerDiscovery::handleDiscoveryResponse(const std::string& response) {
-    Logger::getInstance().log(LogLevel::DEBUG, "Handling discovery response: " + response);
-
-    std::lock_guard<std::mutex> lock(peersMutex_);
-   
-    bool exists = false;
-    for (const auto& peer : peers_) {
-        if (peer == response) {
-            exists = true;
-            break;
+            catch (const std::exception &e)
+            {
+                logError("Failed to broadcast discovery packet: " + std::string(e.what()));
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(5)); // Avoid flooding
         }
     }
 
-    if (!exists) {
-        peers_.push_back(response);
-        Logger::getInstance().log(LogLevel::INFO, "Added a new peer: " + response);
-    } else {
-        Logger::getInstance().log(LogLevel::INFO, "Peer already exists: " + response);
+    void PeerDiscovery::discoveryListener()
+    {
+        while (!stopDiscovery_.load())
+        {
+            try
+            {
+                struct sockaddr_in senderAddr{};
+                std::string response = socketWrapper_->receiveFrom(1024, senderAddr);
+                if (!response.empty())
+                {
+                    if (response == toString(DiscoveryMessageType::DISCOVERY_REQUEST))
+                    {
+                        respondToDiscovery(senderAddr);
+                    }
+                    else if (response == toString(DiscoveryMessageType::DISCOVERY_RESPONSE))
+                    {
+                        handleDiscoveryResponse(response, senderAddr);
+                    }
+                }
+            }
+            catch (const std::exception &e)
+            {
+                logError("Error receiving discovery response: " + std::string(e.what()));
+            }
+        }
     }
-}
 
-std::vector<std::string> PeerDiscovery::getDiscoveredPeers() const {
-    std::lock_guard<std::mutex> lock(peersMutex_);
-    return peers_;
-}
+    void PeerDiscovery::respondToDiscovery(const struct sockaddr_in &senderAddr)
+    {
+        try
+        {
+            std::string response = toString(DiscoveryMessageType::DISCOVERY_RESPONSE);
+            size_t bytesSent = socketWrapper_->sendTo(response, senderAddr);
+            Logger::getInstance().log(LogLevel::DEBUG, "Sent discovery response (" + std::to_string(bytesSent) + " bytes) to " + inet_ntoa(senderAddr.sin_addr));
+        }
+        catch (const std::exception &e)
+        {
+            logError("Failed to send discovery response: " + std::string(e.what()));
+        }
+    }
 
-void PeerDiscovery::logError(const std::string& message) const {
-    Logger::getInstance().log(LogLevel::ERROR, message);
-}
+    void PeerDiscovery::handleDiscoveryResponse(const std::string &response, const struct sockaddr_in &senderAddr)
+    {
+        std::string peerAddr = std::string(inet_ntoa(senderAddr.sin_addr)) + ":" + std::to_string(ntohs(senderAddr.sin_port));
+        Logger::getInstance().log(LogLevel::DEBUG, "Received discovery response: " + response + " from " + peerAddr);
+
+        std::lock_guard<std::mutex> lock(peersMutex_);
+        bool exists = false;
+        for (const std::string& peer : peers_) {
+            if (peer == peerAddr) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists) {
+            peers_.push_back(peerAddr);
+            Logger::getInstance().log(LogLevel::INFO, "Added new peer: " + peerAddr);
+        }
+    }
+
+    void PeerDiscovery::logError(const std::string &message) const
+    {
+        Logger::getInstance().log(LogLevel::ERROR, message);
+    }
 
 } // namespace relay
