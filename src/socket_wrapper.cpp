@@ -1,5 +1,5 @@
-#include "relay/socket_wrapper.h"
-#include "relay/logger.h"
+#include "../include/relay/socket_wrapper.h"
+#include "../include/relay/logger.h"
 #include <stdexcept>
 #include <cstring>
 #include <unistd.h>
@@ -36,21 +36,23 @@ namespace relay
         Logger::getInstance().log(LogLevel::INFO, "SocketWrapper destroyed.");
     }
 
-    void SocketWrapper::initialize(const std::string &ip, int port, bool useIPv6)
+    bool SocketWrapper::initialize(const std::string &ip, int port, bool useIPv6)
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (!isSocketOpen_)
-            throw std::runtime_error("Socket is not open.");
+        if (!isSocketOpen_) {
+            Logger::getInstance().log(LogLevel::ERROR, "Socket is not open.");
+            return false;
+        }
         useIPv6_ = useIPv6;
 
-        sockaddr_in address{};
+        struct ::sockaddr_in address{};
         address.sin_family = AF_INET;
         address.sin_port = htons(port);
         if (inet_pton(AF_INET, ip.c_str(), &address.sin_addr) <= 0)
         {
             const std::string errorMsg = "Invalid IP address: " + ip;
             Logger::getInstance().log(LogLevel::ERROR, errorMsg);
-            throw std::invalid_argument(errorMsg);
+            return false;
         }
 
         if (mode_ == SocketMode::TCP_SERVER || mode_ == SocketMode::UDP)
@@ -59,7 +61,7 @@ namespace relay
             {
                 const std::string errorMsg = "Failed to bind socket: " + std::string(strerror(errno));
                 Logger::getInstance().log(LogLevel::ERROR, errorMsg);
-                throw std::runtime_error(errorMsg);
+                return false;
             }
         }
         else if (mode_ == SocketMode::TCP_CLIENT)
@@ -68,10 +70,11 @@ namespace relay
             {
                 const std::string errorMsg = "Failed to connect to server: " + std::string(strerror(errno));
                 Logger::getInstance().log(LogLevel::ERROR, errorMsg);
-                throw std::runtime_error(errorMsg);
+                return false;
             }
         }
         Logger::getInstance().log(LogLevel::INFO, "Socket initialized at " + ip + ":" + std::to_string(port));
+        return true;
     }
 
     void SocketWrapper::enableMulticast(const std::string &multicastIp, int multicastPort)
@@ -112,7 +115,7 @@ namespace relay
         if (mode_ != SocketMode::TCP_SERVER)
             throw std::logic_error("accept() is only for TCP_SERVER mode.");
 
-        sockaddr_in clientAddr{};
+        struct ::sockaddr_in clientAddr{};
         socklen_t addrLen = sizeof(clientAddr);
         int clientFd = ::accept(socketFd_, reinterpret_cast<sockaddr *>(&clientAddr), &addrLen);
         if (clientFd == -1)
@@ -141,7 +144,7 @@ namespace relay
         return static_cast<size_t>(bytesSent);
     }
 
-    size_t SocketWrapper::sendTo(const std::string &data, const struct sockaddr_in &destAddr)
+    size_t SocketWrapper::sendTo(const std::string &data, struct ::sockaddr_in &destAddr)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!isSocketOpen_ || mode_ != SocketMode::UDP)
@@ -180,7 +183,7 @@ namespace relay
         return std::string(buffer.data(), bytesRead);
     }
 
-    std::string SocketWrapper::receiveFrom(size_t bufferSize, struct sockaddr_in &senderAddr)
+    std::string SocketWrapper::receiveFrom(size_t bufferSize, struct ::sockaddr_in &senderAddr)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!isSocketOpen_ || mode_ != SocketMode::UDP)

@@ -95,14 +95,14 @@ namespace relay
          * @brief Responds to a discovery request from another peer.
          * @param senderAddr Address of the requesting peer.
          */
-        void respondToDiscovery(const struct sockaddr_in &senderAddr);
+        void respondToDiscovery(struct ::sockaddr_in &senderAddr);
 
         /**
          * @brief Handles a discovery response, adding the peer if new.
          * @param response Response message.
          * @param senderAddr Address of the responding peer.
          */
-        void handleDiscoveryResponse(const std::string &response, const struct sockaddr_in &senderAddr);
+        void handleDiscoveryResponse(const std::string &response, struct ::sockaddr_in &senderAddr);
 
         /**
          * @brief Logs an error message via the error handler or logger.

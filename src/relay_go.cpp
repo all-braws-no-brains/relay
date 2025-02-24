@@ -1,8 +1,8 @@
-#include "relay.h"
-#include "relay/peer.h"
-#include "relay/peer_manager.h"
-#include "relay/peer_discovery.h"
-#include "relay/socket_wrapper.h"
+#include "../include/relay.h"
+#include "../include/relay/peer.h"
+#include "../include/relay/peer_manager.h"
+#include "../include/relay/peer_discovery.h"
+#include "../include/relay/socket_wrapper.h"
 #include <cstring>
 #include <vector>
 
@@ -10,11 +10,28 @@ extern "C"
 {
 
     // Peer functions
-    RelayPeer relay_create_peer(const char *id, const char *ip, int port)
+    RelayPeer relay_create_peer(const char *id, const char *ip, int port, int isServer)
     {
-        auto socket = std::make_shared<relay::SocketWrapper>(relay::SocketMode::TCP_CLIENT);
-        socket->initialize(ip, port);
-        return new relay::Peer(id, ip, port, socket);
+        auto mode = isServer ? relay::SocketMode::TCP_SERVER : relay::SocketMode::TCP_CLIENT;
+        auto socket = std::make_shared<relay::SocketWrapper>(mode);
+        if (!socket->initialize(ip, port))
+        {
+            fprintf(stderr, "[ERROR] Failed to initialize %s peer %s at %s:%d\n",
+                    isServer ? "server" : "client", id, ip, port);
+            return nullptr;
+        }
+        auto peer = new relay::Peer(id, ip, port, socket);
+        if (isServer)
+        {
+            // For server, we need to call listen()
+            if (listen(socket->getSocketFd(), 5) == -1)
+            { // 5 is backlog
+                fprintf(stderr, "[ERROR] Failed to listen on peer %s: %s\n", id, strerror(errno));
+                delete peer;
+                return nullptr;
+            }
+        }
+        return peer;
     }
 
     int relay_send_message(RelayPeer peer, const char *message)
