@@ -1,5 +1,5 @@
-#include "relay/peer_discovery.h"
-#include "relay/logger.h"
+#include "../include/relay/peer_discovery.h"
+#include "../include/relay/logger.h"
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
@@ -99,7 +99,7 @@ namespace relay
             try
             {
                 std::string discoveryMessage = toString(DiscoveryMessageType::DISCOVERY_REQUEST);
-                struct sockaddr_in destAddr{};
+                struct ::sockaddr_in destAddr{};
                 destAddr.sin_family = AF_INET;
                 destAddr.sin_port = htons(multicastPort_);
                 inet_pton(AF_INET, multicastIp_.c_str(), &destAddr.sin_addr);
@@ -121,7 +121,7 @@ namespace relay
         {
             try
             {
-                struct sockaddr_in senderAddr{};
+                struct ::sockaddr_in senderAddr{};
                 std::string response = socketWrapper_->receiveFrom(1024, senderAddr);
                 if (!response.empty())
                 {
@@ -142,7 +142,7 @@ namespace relay
         }
     }
 
-    void PeerDiscovery::respondToDiscovery(const struct sockaddr_in &senderAddr)
+    void PeerDiscovery::respondToDiscovery(struct ::sockaddr_in &senderAddr)
     {
         try
         {
@@ -156,7 +156,7 @@ namespace relay
         }
     }
 
-    void PeerDiscovery::handleDiscoveryResponse(const std::string &response, const struct sockaddr_in &senderAddr)
+    void PeerDiscovery::handleDiscoveryResponse(const std::string &response, struct ::sockaddr_in &senderAddr)
     {
         std::string peerAddr = std::string(inet_ntoa(senderAddr.sin_addr)) + ":" + std::to_string(ntohs(senderAddr.sin_port));
         Logger::getInstance().log(LogLevel::DEBUG, "Received discovery response: " + response + " from " + peerAddr);

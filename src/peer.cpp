@@ -1,5 +1,5 @@
-#include "relay/peer.h"
-#include "relay/logger.h"
+#include "../include/relay/peer.h"
+#include "../include/relay/logger.h"
 #include <iostream>
 #include <mutex>
 
@@ -104,6 +104,7 @@ namespace relay
         {
             Logger::getInstance().log(LogLevel::ERROR, "Failed to send message to peer: " + id_ + ": " + e.what());
         }
+        return false;
     }
 
     std::string Peer::receiveMessage()

@@ -1,5 +1,5 @@
 #ifndef RELAY_SOCKET_WRAPPER_H
-#define REALY_SOCKET_WRAPPER_H
+#define RELAY_SOCKET_WRAPPER_H
 
 #include <string>
 #include <mutex>
@@ -10,6 +10,8 @@
 #include <optional>
 #include <functional>
 #include <atomic>
+#include <netinet/in.h>
+#include <arpa/inet.h> 
 
 namespace relay
 {
@@ -51,7 +53,7 @@ namespace relay
          * @param port Port to bind/connect to.
          * @param useIPv6 Use IPv6 instead of IPv4 (default: false).
          */
-        void initialize(const std::string &ip, int port, bool useIPv6 = false);
+        bool initialize(const std::string &ip, int port, bool useIPv6 = false);
 
         /**
          * @brief Enables multicast on a UDP socket.
@@ -85,7 +87,7 @@ namespace relay
          * @param destAddr Destination address.
          * @return Bytes sent, or 0 on failure.
          */
-        size_t sendTo(const std::string &data, const struct sockaddr_in &destAddr);
+        size_t sendTo(const std::string &data, struct ::sockaddr_in &destAddr);
 
         /**
          * @brief Receives data from the socket.
@@ -100,7 +102,7 @@ namespace relay
          * @param senderAddr Output parameter for sender’s address.
          * @return Received data, or empty string if failed.
          */
-        std::string receiveFrom(size_t bufferSize, struct sockaddr_in &senderAddr);
+        std::string receiveFrom(size_t bufferSize, struct ::sockaddr_in &senderAddr);
 
         /**
          * @brief Closes the socket.
@@ -138,6 +140,7 @@ namespace relay
          */
         void shutdown(bool read = true, bool write = true);
 
+        int getSocketFd() const { return socketFd_; }
     private:
         int socketFd_; ///< Socket file descriptor.
         SocketMode mode_;

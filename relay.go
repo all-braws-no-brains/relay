@@ -3,7 +3,7 @@ package relay
 /*
 #cgo CFLAGS: -I${SRCDIR}/include
 #cgo LDFLAGS: -L${SRCDIR}/build -lrelay
-#include "relay.h"
+#include "../include/relay.h"
 #include <stdlib.h> // For free()
 */
 import "C"
@@ -27,12 +27,16 @@ type PeerDiscovery struct {
 }
 
 // NewPeer creates a new peer
-func NewPeer(id, ip string, port int) *Peer {
+func NewPeer(id, ip string, port int, isServer int) *Peer {
 	cID := C.CString(id)
 	cIP := C.CString(ip)
 	defer C.free(unsafe.Pointer(cID))
 	defer C.free(unsafe.Pointer(cIP))
-	return &Peer{ptr: C.relay_create_peer(cID, cIP, C.int(port))}
+	ptr := C.relay_create_peer(cID, cIP, C.int(port), C.int(isServer))
+	if ptr == nil {
+		return nil
+	}
+	return &Peer{ptr: ptr}
 }
 
 // SendMessage sends a message to the peer

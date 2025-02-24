@@ -12,7 +12,7 @@ extern "C"
     typedef void *RelayPeerDiscovery;
 
     // Peer functions
-    RelayPeer relay_create_peer(const char *id, const char *ip, int port);
+    RelayPeer relay_create_peer(const char *id, const char *ip, int port, int isServer);
     int relay_send_message(RelayPeer peer, const char *message);
     const char *relay_receive_message(RelayPeer peer); // Caller must free
     void relay_close_peer(RelayPeer peer);

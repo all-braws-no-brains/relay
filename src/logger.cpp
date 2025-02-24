@@ -1,4 +1,4 @@
-#include "relay/logger.h"
+#include "../include/relay/logger.h"
 
 namespace relay
 {

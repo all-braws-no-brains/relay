@@ -1,5 +1,5 @@
-#include "relay/peer_manager.h"
-#include "relay/logger.h"
+#include "../include/relay/peer_manager.h"
+#include "../include/relay/logger.h"
 #include <stdexcept>
 #include <algorithm>
 
