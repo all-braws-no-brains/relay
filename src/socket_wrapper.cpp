@@ -39,7 +39,8 @@ namespace relay
     bool SocketWrapper::initialize(const std::string &ip, int port, bool useIPv6)
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (!isSocketOpen_) {
+        if (!isSocketOpen_)
+        {
             Logger::getInstance().log(LogLevel::ERROR, "Socket is not open.");
             return false;
         }
@@ -259,4 +260,13 @@ namespace relay
         }
     }
 
+    void SocketWrapper::setReceiveTimeout(int seconds)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        struct timeval tv{seconds, 0};
+        if (setsockopt(socketFd_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1)
+        {
+            Logger::getInstance().log(LogLevel::ERROR, "Failed to receive timeout: " + std::string(strerror(errno)));
+        }
+    }
 } // namespace relay

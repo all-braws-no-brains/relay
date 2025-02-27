@@ -68,7 +68,7 @@ namespace relay
          * @return Vector of peer addresses.
          */
         std::vector<std::string> getDiscoveredPeers() const;
-
+        
     private:
         std::string multicastIp_;                      ///< Multicast group address.
         int multicastPort_;                            ///< Multicast port.

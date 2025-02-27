@@ -103,6 +103,10 @@ namespace relay
          */
         std::vector<std::shared_ptr<Peer>> listPeers() const;
 
+        /**
+         * @brief Broadcasts a message to all available peers.
+         */
+        void broadcast(const std::string& message);
     private:
         /**
          * @brief A map that stores peers by their unique IDs.

@@ -104,6 +104,24 @@ namespace relay
          */
         void closeConnection();
 
+        /**
+         * @brief Accepts multiple clients
+         * @param maxClients Maximum number of clients that can be accepted 
+         */
+        void acceptClients(int maxClients);
+
+        /**
+         * @brief Returns the socket occupied by the peer
+         * @return Returns the socket occupied by the peer
+         */
+        std::shared_ptr<SocketWrapper> getSocket() const { return socket_;}
+
+        /**
+         * @brief Returns the list of clients of the peer
+         * @return Returns the list of clients of the peer
+         */
+        std::vector<std::shared_ptr<SocketWrapper>> getClients() const { return clients_;}
+
     private:
         std::string id_;                                   ///< Unique identifier of the peer.
         std::string ip_;                                   ///< IP address of the peer.
@@ -114,7 +132,7 @@ namespace relay
         mutable std::mutex mutex_; ///< Mutex for thread-safe access.
 
         std::shared_ptr<SocketWrapper> socket_; ///< Peer's socket connection.
-
+        std::vector<std::shared_ptr<SocketWrapper>> clients_;
         mutable std::mutex messageQueueMutex_;
         std::queue<std::string> messageQueue_;
     };

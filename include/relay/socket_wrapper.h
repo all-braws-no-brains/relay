@@ -140,7 +140,12 @@ namespace relay
          */
         void shutdown(bool read = true, bool write = true);
 
-        int getSocketFd() const { return socketFd_; }
+        int getSocketFd() const { return socketFd_; };
+
+        SocketMode getMode() const { return mode_; };
+        
+        void setReceiveTimeout(int seconds);
+        
     private:
         int socketFd_; ///< Socket file descriptor.
         SocketMode mode_;
