@@ -58,6 +58,12 @@ namespace relay
          */
         void log(LogLevel level, const std::string &message);
 
+        /**
+         * @brief Gets a list of recent errors
+         * @return Returns a list of recent errors stored
+         */
+        std::vector<std::string> getRecentErrors() const;
+
     private:
         Logger();
         ~Logger();
@@ -68,6 +74,9 @@ namespace relay
         LogLevel logLevel_;
         std::ofstream logFile_;
         bool fileLoggingEnabled_;
+        std::vector<std::string> recentErrors_;
+        static const size_t MAX_ERRORS = 10;
+        std::string timestamp() const;
 
         const std::map<LogLevel, std::string> loglevelStrings_ = {
             {LogLevel::DEBUG, "DEBUG"},

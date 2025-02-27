@@ -106,7 +106,7 @@ namespace relay
 
         /**
          * @brief Accepts multiple clients
-         * @param maxClients Maximum number of clients that can be accepted 
+         * @param maxClients Maximum number of clients that can be accepted
          */
         void acceptClients(int maxClients);
 
@@ -114,13 +114,31 @@ namespace relay
          * @brief Returns the socket occupied by the peer
          * @return Returns the socket occupied by the peer
          */
-        std::shared_ptr<SocketWrapper> getSocket() const { return socket_;}
+        std::shared_ptr<SocketWrapper> getSocket() const { return socket_; }
 
         /**
          * @brief Returns the list of clients of the peer
          * @return Returns the list of clients of the peer
          */
-        std::vector<std::shared_ptr<SocketWrapper>> getClients() const { return clients_;}
+        std::vector<std::shared_ptr<SocketWrapper>> getClients() const { return clients_; }
+
+        /**
+         * [DEMO]
+         * @brief Following methods are for the GUI feature
+         */
+        int64_t getLatency() const { return latencyMs_; }
+        int getMessagesSent() const { return messagesSent_; }
+        int getMessagesReceived() const { return messagesReceived_; }
+        size_t getBytesSent() const { return bytesSent_; }
+        size_t getBytesReceived() const { return bytesReceived_; }
+        bool isConnected() const { return isConnected_; }
+        void updateLatency()
+        {
+            if (lastSent_ != std::chrono::steady_clock::time_point() && lastReceived_ != std::chrono::steady_clock::time_point())
+            {
+                latencyMs_ = std::chrono::duration_cast<std::chrono::milliseconds>(lastReceived_ - lastSent_).count();
+            }
+        }
 
     private:
         std::string id_;                                   ///< Unique identifier of the peer.
@@ -135,6 +153,15 @@ namespace relay
         std::vector<std::shared_ptr<SocketWrapper>> clients_;
         mutable std::mutex messageQueueMutex_;
         std::queue<std::string> messageQueue_;
+
+        std::chrono::steady_clock::time_point lastSent_;
+        std::chrono::steady_clock::time_point lastReceived_;
+        int64_t latencyMs_;
+        int messagesSent_;
+        int messagesReceived_;
+        size_t bytesSent_;
+        size_t bytesReceived_;
+        bool isConnected_;
     };
 
 } // namespace relay

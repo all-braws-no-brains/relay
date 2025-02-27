@@ -18,6 +18,13 @@ extern "C"
     void relay_close_peer(RelayPeer peer);
     void relay_destroy_peer(RelayPeer peer);
     void relay_accept_clients(RelayPeer peer, int maxClients);
+    int64_t relay_get_peer_latency(RelayPeer peer);
+    int relay_get_peer_messages_sent(RelayPeer peer);
+    int relay_get_peer_messages_received(RelayPeer peer);
+    size_t relay_get_peer_bytes_sent(RelayPeer peer);
+    size_t relay_get_peer_bytes_received(RelayPeer peer);
+    int relay_is_peer_connected(RelayPeer peer);
+    const char **relay_get_recent_errors(int *count);
 
     // PeerManager functions
     RelayPeerManager relay_create_peer_manager();

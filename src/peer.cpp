@@ -90,15 +90,24 @@ namespace relay
 
         if (!socket_ || !socket_->isOpen())
         {
+            isConnected_ = false;
             Logger::getInstance().log(LogLevel::WARNING, "Cannot send message, socket closed for Peer: " + id_);
             return false;
         }
 
         try
         {
-            socket_->send(message);
-            Logger::getInstance().log(LogLevel::INFO, "Sent message to peer " + id_ + ": " + message);
-            return true;
+            lastSent_ = std::chrono::steady_clock::now();
+            size_t sent = socket_->send(message);
+
+            if (sent > 0)
+            {
+                messagesSent_++;
+                bytesSent_ += sent;
+                isConnected_ = true;
+                Logger::getInstance().log(LogLevel::INFO, "Sent message to peer " + id_ + ": " + message);
+                return true;
+            }
         }
         catch (const std::exception &e)
         {
@@ -133,14 +142,31 @@ namespace relay
                     if (!msg.empty())
                         break;
                 }
-                Logger::getInstance().log(LogLevel::INFO, "Recevied message from client: " + msg);
-                return msg;
+                if (!msg.empty())
+                {
+                    Logger::getInstance().log(LogLevel::INFO, "Recevied message from client: " + msg);
+                    lastReceived_ = std::chrono::steady_clock::now();
+                    messagesReceived_++;
+                    bytesReceived_ += msg.size();
+                    updateLatency();
+                    isConnected_ = true;
+                    return msg;
+                }
             }
             else
             {
                 std::string message = socket_->receive(1024);
                 Logger::getInstance().log(LogLevel::INFO, "Received message from peer " + id_ + ": " + message);
-                return message;
+                if (!message.empty())
+                {
+                    Logger::getInstance().log(LogLevel::INFO, "Recevied message from client: " + message);
+                    lastReceived_ = std::chrono::steady_clock::now();
+                    messagesReceived_++;
+                    bytesReceived_ += message.size();
+                    updateLatency();
+                    isConnected_ = true;
+                    return message;
+                }
             }
         }
         catch (const std::exception &e)
