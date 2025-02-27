@@ -61,6 +61,28 @@ namespace relay
             logFile_ << logMessage << '\n'; // Use '\n' for file logging
             logFile_.flush();               // Optional: Flush manually if needed for real-time logging
         }
+
+        if (level == LogLevel::ERROR)
+        {
+            if (recentErrors_.size() >= MAX_ERRORS)
+                recentErrors_.erase(recentErrors_.begin());
+            recentErrors_.push_back("[" + timestamp() + "] " + message);
+        }
+    }
+
+    std::vector<std::string> Logger::getRecentErrors() const
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return recentErrors_;
+    }
+
+    std::string Logger::timestamp() const
+    {
+        auto now = std::chrono::system_clock::now();
+        auto time = std::chrono::system_clock::to_time_t(now);
+        std::ostringstream oss;
+        oss << std::put_time(std::localtime(&time), "%Y-%m-%d %H:%M:%S");
+        return oss.string();
     }
 
 } // namespace relay

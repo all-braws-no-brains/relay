@@ -104,6 +104,14 @@ func (m *PeerManager) Destroy() {
 	C.relay_destroy_peer_manager(m.ptr)
 }
 
+func (p *Peer) GetLatency() int64     { return int64(C.relay_get_peer_latency(p.ptr)) }
+func (p *Peer) MessagesSent() int     { return int(C.relay_get_peer_messages_sent(p.ptr)) }
+func (p *Peer) MessagesReceived() int { return int(C.relay_get_peer_messages_received(p.ptr)) }
+func (p *Peer) BytesSent() uint64     { return uint64(C.relay_get_peer_bytes_sent(p.ptr)) }
+func (p *Peer) BytesReceived() uint64 { return uint64(C.relay_get_peer_bytes_received(p.ptr)) }
+func (p *Peer) IsConnected() bool     { return C.relay_is_peer_connected(p.ptr) != 0 }
+func GetRecentErrors() []string       { /* Implement fetching errors */ }
+
 // NewPeerDiscovery creates a new peer discovery instance
 func NewPeerDiscovery(multicastIp string, multicastPort int, localIp string) *PeerDiscovery {
 	cMulticastIp := C.CString(multicastIp)
