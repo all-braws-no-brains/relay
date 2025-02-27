@@ -31,6 +31,10 @@ extern "C"
                 return nullptr;
             }
         }
+        else
+        {
+            socket->setReceiveTimeout(2);
+        }
         return peer;
     }
 
@@ -61,6 +65,12 @@ extern "C"
         delete static_cast<relay::Peer *>(peer);
     }
 
+    void relay_accept_clients(RelayPeer peer, int maxClients)
+    {
+        if (peer)
+            static_cast<relay::Peer *>(peer)->acceptClients(maxClients);
+    }
+
     // PeerManager functions
     RelayPeerManager relay_create_peer_manager()
     {
@@ -71,7 +81,7 @@ extern "C"
     {
         if (mgr && peer)
         {
-            static_cast<relay::PeerManager *>(mgr)->addPeer(std::shared_ptr<relay::Peer>(static_cast<relay::Peer *>(peer)));
+            static_cast<relay::PeerManager *>(mgr)->addPeer(std::shared_ptr<relay::Peer>(static_cast<relay::Peer *>(peer), [](relay::Peer*){}));
         }
     }
 
@@ -125,5 +135,15 @@ extern "C"
     void relay_destroy_peer_discovery(RelayPeerDiscovery discovery)
     {
         delete static_cast<relay::PeerDiscovery *>(discovery);
+    }
+
+    int relay_broadcast(RelayPeerManager mgr, const char *message)
+    {
+        if (!mgr || !message)
+        {
+            return 0;
+        }
+        static_cast<relay::PeerManager *>(mgr)->broadcast(std::string(message));
+        return 1;
     }
 }

@@ -119,9 +119,29 @@ namespace relay
 
         try
         {
-            std::string message = socket_->receive(1024);
-            Logger::getInstance().log(LogLevel::INFO, "Received message from peer " + id_ + ": " + message);
-            return message;
+            if (socket_->getMode() == SocketMode::TCP_SERVER)
+            {
+                if (clients_.empty())
+                {
+                    Logger::getInstance().log(LogLevel::WARNING, "No clients connected to receive from");
+                    return "";
+                }
+                std::string msg;
+                for (auto &client : clients_)
+                {
+                    msg = client->receive(1024);
+                    if (!msg.empty())
+                        break;
+                }
+                Logger::getInstance().log(LogLevel::INFO, "Recevied message from client: " + msg);
+                return msg;
+            }
+            else
+            {
+                std::string message = socket_->receive(1024);
+                Logger::getInstance().log(LogLevel::INFO, "Received message from peer " + id_ + ": " + message);
+                return message;
+            }
         }
         catch (const std::exception &e)
         {
@@ -144,4 +164,20 @@ namespace relay
             Logger::getInstance().log(LogLevel::INFO, "Connection closed for peer: " + id_);
         }
     }
+
+    void Peer::acceptClients(int maxClients)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (socket_->getMode() != SocketMode::TCP_SERVER)
+            return;
+        for (int i = 0; i < maxClients; i++)
+        {
+            auto client = socket_->accept();
+            if (client)
+            {
+                clients_.push_back(client);
+            }
+        }
+    }
+
 } // namespace relays

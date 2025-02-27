@@ -66,6 +66,11 @@ func (p *Peer) Destroy() {
 	C.relay_destroy_peer(p.ptr)
 }
 
+// AcceptClients allows the server to send brodcast to multiple clients
+func (p *Peer) AcceptClients(maxClient int) {
+	C.relay_accept_clients(p.ptr, C.int(maxClient))
+}
+
 // NewPeerManager creates a new peer manager
 func NewPeerManager() *PeerManager {
 	return &PeerManager{ptr: C.relay_create_peer_manager()}
@@ -85,6 +90,13 @@ func (m *PeerManager) RelayMessage(sourceId, targetId, message string) bool {
 	defer C.free(unsafe.Pointer(cTarget))
 	defer C.free(unsafe.Pointer(cMsg))
 	return C.relay_relay_message(m.ptr, cSource, cTarget, cMsg) != 0
+}
+
+// Broadcast sends a message to all available peers
+func (m *PeerManager) Broadcast(message string) bool {
+	cMsg := C.CString(message)
+	defer C.free(unsafe.Pointer(cMsg))
+	return C.relay_broadcast(m.ptr, cMsg) != 0
 }
 
 // Destroy frees the peer manager

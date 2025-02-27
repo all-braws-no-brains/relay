@@ -17,16 +17,14 @@ namespace relay
             Logger::getInstance().log(LogLevel::ERROR, "Cannot add a null peer.");
             throw std::invalid_argument("Cannot add a null peer.");
         }
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            if (peers_.find(peer->getId()) != peers_.end())
-            {
-                Logger::getInstance().log(LogLevel::ERROR, "Peer with ID already exists: " + peer->getId());
-                return;
-            }
-            peers_.emplace(peer->getId(), peer);
-        }
 
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (peers_.find(peer->getId()) != peers_.end())
+        {
+            Logger::getInstance().log(LogLevel::ERROR, "Peer with ID already exists: " + peer->getId());
+            return;
+        }
+        peers_.emplace(peer->getId(), peer);
         Logger::getInstance().log(LogLevel::INFO, "Added peer with ID: " + peer->getId());
     }
 
@@ -159,5 +157,38 @@ namespace relay
             peerList.push_back(peer);
         }
         return peerList;
+    }
+
+    void PeerManager::broadcast(const std::string &message)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (auto &[id, peer] : peers_)
+        {
+            if (peer->getSocket()->getMode() == SocketMode::TCP_SERVER)
+            {
+                Logger::getInstance().log(LogLevel::INFO, "Skipping broadcast to server peer " + id + "; relaying to clients");
+
+                for (const auto &client : peer->getClients())
+                {
+                    if (!client->send(message))
+                    {
+                        Logger::getInstance().log(LogLevel::WARNING, "Failed to relay message");
+                    }
+                    else
+                    {
+                        Logger::getInstance().log(LogLevel::INFO, "Relayed message to client of " + id + " : " + message);
+                    }
+                }
+                continue;
+            }
+            if (!peer->sendMessage(message))
+            {
+                Logger::getInstance().log(LogLevel::WARNING, "Failed to broadcast message to peer " + id);
+            }
+            else
+            {
+                Logger::getInstance().log(LogLevel::INFO, "Broadcasted message to peer " + id + ": " + message);
+            }
+        }
     }
 };

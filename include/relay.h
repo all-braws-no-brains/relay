@@ -17,12 +17,14 @@ extern "C"
     const char *relay_receive_message(RelayPeer peer); // Caller must free
     void relay_close_peer(RelayPeer peer);
     void relay_destroy_peer(RelayPeer peer);
+    void relay_accept_clients(RelayPeer peer, int maxClients);
 
     // PeerManager functions
     RelayPeerManager relay_create_peer_manager();
     void relay_add_peer(RelayPeerManager mgr, RelayPeer peer);
     int relay_relay_message(RelayPeerManager mgr, const char *sourceId, const char *targetId, const char *message);
     void relay_destroy_peer_manager(RelayPeerManager mgr);
+    int relay_broadcast(RelayPeerManager mgr, const char *message);
 
     // PeerDiscovery functions
     RelayPeerDiscovery relay_create_peer_discovery(const char *multicastIp, int multicastPort, const char *localIp);
